@@ -1,0 +1,104 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>FPS エイム感度診断</title>
+    <style>
+        body { font-family: Arial, sans-serif; margin: 20px; }
+        h1 { color: #333; }
+        label, p { font-size: 1.1em; margin-top: 10px; }
+        input, button { margin-top: 5px; font-size: 1em; }
+        #result { margin-top: 20px; font-size: 1.2em; color: #007700; }
+    </style>
+</head>
+<body>
+    <h1>FPS エイム感度診断</h1>
+    <div id="form">
+        <label>1. テーブルにどのくらい腕を乗せていますか？（1～10割）:</label><br>
+        <input type="number" id="armPosition" min="1" max="10" required><br><br>
+
+        <label>2. マウスの持ち方:</label><br>
+        <input type="radio" id="pinch" name="gripType" value="つまみ持ち" required> つまみ持ち<br>
+        <input type="radio" id="claw" name="gripType" value="つかみ持ち"> つかみ持ち<br>
+        <input type="radio" id="palm" name="gripType" value="かぶせ持ち"> かぶせ持ち<br><br>
+
+        <label>3. 脇の開き具合を角度で教えてください（0～90度）:</label><br>
+        <input type="number" id="armAngle" min="0" max="90" required><br><br>
+
+        <button onclick="calculateSensitivity()">診断する</button>
+    </div>
+
+    <div id="result"></div>
+
+    <script>
+        async function calculateSensitivity() {
+            // 入力値の取得
+            const armPosition = parseInt(document.getElementById("armPosition").value);
+            const gripType = document.querySelector('input[name="gripType"]:checked').value;
+            const armAngle = parseInt(document.getElementById("armAngle").value);
+
+            // 計算のための基準値
+            const baseSensitivity = 23;
+            const maxSensitivity = 40;
+            const minSensitivity = 5;
+
+            // 1. テーブルに腕をどのくらい乗せているか
+            const armWeight = (armPosition - 5) * 1.2;
+
+            // 2. マウスの持ち方に応じた調整
+            let gripWeight = 0;
+            if (gripType === "つまみ持ち") {
+                gripWeight = -4;
+            } else if (gripType === "かぶせ持ち") {
+                gripWeight = 4;
+            }
+
+            // 3. 脇の開き具合に応じた調整
+            const angleWeight = ((armAngle - 45) / 45) * 7.5;
+
+            // 各重みを反映した最終感度の計算
+            let sensitivity = baseSensitivity + armWeight + gripWeight + angleWeight;
+            sensitivity = Math.round(Math.max(minSensitivity, Math.min(maxSensitivity, sensitivity)));
+
+            // 選手データの読み込みと検索
+            const playerData = await fetch('/players.csv')
+                .then(response => response.text());
+            const players = parseCSVData(playerData);
+            const closestPlayer = findClosestPlayer(players, sensitivity);
+
+            // 結果の表示
+            document.getElementById("result").innerHTML = 
+                `<p>あなたの適正感度は【振り向き${sensitivity}cm】です。</p>` +
+                `<p>あなたの感度に似たプロ選手</p>` +
+                `<p>ゲーム: ${closestPlayer.game}</p>` +
+                `<p>チーム名: ${closestPlayer.team}</p>` +
+                `<p>選手名: ${closestPlayer.name}</p>` +
+                `<p>振り向き感度: ${closestPlayer.sensitivity} cm</p>`;
+        }
+
+        function parseCSVData(data) {
+            const players = [];
+            const lines = data.trim().split("\n");
+            for (let i = 1; i < lines.length; i++) { // 1行目はヘッダーなので飛ばす
+                const [game, team, name, sensitivity] = lines[i].split(",");
+                players.push({
+                    game: game.trim(),
+                    team: team.trim(),
+                    name: name.trim(),
+                    sensitivity: parseFloat(sensitivity.trim())
+                });
+            }
+            return players;
+        }
+
+        function findClosestPlayer(players, targetSensitivity) {
+            return players.reduce((closest, player) => {
+                const closestDiff = Math.abs(closest.sensitivity - targetSensitivity);
+                const playerDiff = Math.abs(player.sensitivity - targetSensitivity);
+                return playerDiff < closestDiff ? player : closest;
+            });
+        }
+    </script>
+</body>
+</html>
